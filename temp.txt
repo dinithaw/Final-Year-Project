@@ -1,0 +1,589 @@
+okay here's my react frontend codes:
+
+app.js:
+import React, { useState, useEffect } from 'react';
+import './App.css';
+
+function LiveStream() {
+  const [detectionResults, setDetectionResults] = useState([]);
+  const [dateTime, setDateTime] = useState(new Date());
+  const [location, setLocation] = useState({ lat: null, lon: null });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [lastFetchTime, setLastFetchTime] = useState(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        console.log("Fetching detection results...");
+        const startTime = new Date();
+        
+        const response = await fetch('http://localhost:5001/detection_results');
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log("Received data:", data);
+        
+        // Handle the response data
+        if (data.status === 'success' && Array.isArray(data.data)) {
+          console.log("Using new format data:", data.data);
+          setDetectionResults(data.data);
+        } else {
+          console.log("Using old format data:", data);
+          // Convert old format to new format
+          const formattedResults = Object.entries(data).map(([label, count]) => {
+            const match = label.match(/(.*) \(avg score: ([\d.]+)\)/);
+            if (match) {
+              return {
+                name: match[1].trim(),
+                count: count,
+                accuracy: parseFloat(match[2]) * 100,
+                color: getColorForDisease(match[1].trim())
+              };
+            } else {
+              return {
+                name: label,
+                count: count,
+                accuracy: 50, // Default to 50%
+                color: getColorForDisease(label)
+              };
+            }
+          });
+          console.log("Formatted results:", formattedResults);
+          setDetectionResults(formattedResults);
+        }
+        
+        setLoading(false);
+        const endTime = new Date();
+        setLastFetchTime(`${endTime - startTime}ms`);
+      } catch (error) {
+        console.error('Error fetching detection results:', error);
+        setError(error.message);
+        setLoading(false);
+      }
+    };
+
+    // Fetch data immediately and then set up interval
+    fetchData();
+    const intervalId = setInterval(() => {
+      setDateTime(new Date());
+      fetchData();
+    }, 1000);
+
+    // Get location once
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({
+            lat: position.coords.latitude.toFixed(4),
+            lon: position.coords.longitude.toFixed(4)
+          });
+        },
+        (error) => {
+          console.error("Geolocation error:", error);
+        }
+      );
+    }
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  // Function to get color for disease
+  const getColorForDisease = (diseaseName) => {
+    const colorMap = {
+      'bacterial_leaf_blight': [255, 0, 0],
+      'brown_spot': [165, 42, 42],
+      'healthy': [0, 255, 0],
+      'leaf_blast': [128, 0, 128],
+      'leaf_scald': [255, 165, 0],
+      'narrow_brown_spot': [210, 105, 30],
+      'neck_blast': [0, 0, 255],
+      'rice_hispa': [255, 20, 147],
+      'sheath_blight': [139, 69, 19],
+      'tungro': [255, 255, 0]
+    };
+    
+    return colorMap[diseaseName.toLowerCase()] || [0, 128, 0]; // Default to green
+  };
+
+  // Convert RGB array to CSS color string
+  const rgbToCSS = (rgbArray) => {
+    return `rgb(${rgbArray[0]}, ${rgbArray[1]}, ${rgbArray[2]})`;
+  };
+
+  return (
+    <div className="live-stream-container">
+      <header>
+        <h1>Rice Leaf Disease Detection</h1>
+        <div className="info-bar">
+          <span>{dateTime.toLocaleString()}</span>
+          {location.lat && location.lon && (
+            <span> | Lat: {location.lat} Lon: {location.lon}</span>
+          )}
+          {lastFetchTime && (
+            <span> | Last fetch: {lastFetchTime}</span>
+          )}
+        </div>
+      </header>
+      
+      <div className="content-container">
+        <div className="video-container">
+          <img 
+            src="http://localhost:5001/video_feed" 
+            alt="Live Stream" 
+            onError={(e) => {
+              console.error("Video feed error:", e);
+              e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 800 600'%3E%3Crect fill='%23f0f0f0' width='800' height='600'/%3E%3Ctext x='400' y='300' font-family='Arial' font-size='30' text-anchor='middle' fill='%23999'%3EVideo feed unavailable%3C/text%3E%3C/svg%3E";
+            }}
+          />
+        </div>
+        
+        <div className="detection-results">
+          <h2>Detected Diseases:</h2>
+          
+          <div className="debug-info">
+            <p>Status: {loading ? "Loading" : error ? "Error" : "Ready"}</p>
+            <p>Results count: {detectionResults.length}</p>
+            {error && <p className="error-text">Error: {error}</p>}
+          </div>
+          
+          {loading ? (
+            <div className="loading-message">
+              <p>Loading detection results...</p>
+            </div>
+          ) : error ? (
+            <div className="error-message">
+              <p>Error: {error}</p>
+              <p className="error-hint">Make sure your backend server is running and accessible.</p>
+            </div>
+          ) : detectionResults.length === 0 ? (
+            <p className="no-detection-message">No diseases detected. Point camera at rice plants.</p>
+          ) : (
+            <div className="results-container">
+              {detectionResults.map((result, index) => (
+                <div key={index} className="disease-item">
+                  <div className="disease-header">
+                    <h3 className="disease-name" style={{ color: rgbToCSS(result.color) }}>
+                      {result.name.replace(/_/g, ' ').toUpperCase()}
+                    </h3>
+                    <span className="disease-count">
+                      Count: {result.count}
+                    </span>
+                  </div>
+                  
+                  <div className="accuracy-bar-container">
+                    <div 
+                      className="accuracy-bar"
+                      style={{ 
+                        width: `${result.accuracy}%`,
+                        backgroundColor: rgbToCSS(result.color)
+                      }}
+                    ></div>
+                    <span className="accuracy-text">
+                      {result.accuracy?.toFixed(2) || 0}% confidence
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      
+      <footer>
+        Developed by Dinitha Wickramasinghe
+      </footer>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <div className="App">
+      <LiveStream />
+    </div>
+  );
+}
+
+export default App;
+
+
+
+app.css:
+.App {
+  text-align: center;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.live-stream-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: #f8f9fa;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  background-color: #2c3e50;
+  color: white;
+  padding: 15px;
+  border-radius: 8px 8px 0 0;
+  margin-bottom: 20px;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.info-bar {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+  font-size: 14px;
+  color: #ecf0f1;
+}
+
+.content-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+}
+
+@media (min-width: 992px) {
+  .content-container {
+    flex-direction: row;
+  }
+  
+  .video-container {
+    width: 65%;
+  }
+  
+  .detection-results {
+    width: 35%;
+  }
+}
+
+.video-container {
+  background-color: #222;
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.video-container img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 4px;
+  border: 2px solid #27ae60;
+}
+
+.detection-results {
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.detection-results h2 {
+  margin-top: 0;
+  color: #16a085;
+  font-size: 22px;
+  border-bottom: 2px solid #eee;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+.disease-item {
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 15px;
+  border-left: 4px solid #ccc;
+}
+
+.disease-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.disease-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.disease-count {
+  background-color: #eee;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.accuracy-bar-container {
+  position: relative;
+  height: 24px;
+  background-color: #eee;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.accuracy-bar {
+  height: 100%;
+  border-radius: 12px;
+  transition: width 0.3s ease;
+}
+
+.accuracy-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}
+
+.loading-message {
+  text-align: center;
+  padding: 30px 0;
+  color: #666;
+}
+
+.error-message {
+  background-color: #fee;
+  border-left: 4px solid #e74c3c;
+  padding: 15px;
+  border-radius: 4px;
+}
+
+.error-hint {
+  font-size: 14px;
+  margin-top: 8px;
+  color: #7f8c8d;
+}
+
+.no-detection-message {
+  text-align: center;
+  padding: 30px 0;
+  color: #666;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+}
+
+footer {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #2c3e50;
+  color: white;
+  border-radius: 0 0 8px 8px;
+  font-size: 14px;
+}
+
+
+index.js:
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
+import reportWebVitals from './reportWebVitals';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+// If you want to start measuring performance in your app, pass a function
+// to log results (for example: reportWebVitals(console.log))
+// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
+reportWebVitals();
+
+
+index.css:
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Arial', sans-serif;
+  background-color: #121212;
+  color: #ffffff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.App {
+  text-align: center;
+}
+
+.live-stream-container {
+  background-color: #1e1e1e;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+h1 {
+  margin-bottom: 20px;
+  font-size: 24px;
+  color: #e0e0e0;
+}
+
+.video-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+img {
+  max-width: 100%;
+  border-radius: 10px;
+}
+
+.detection-results {
+  margin-top: 20px;
+  font-size: 18px;
+}
+
+.detection-results ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+.detection-results li {
+  margin: 5px 0;
+  color: #76c7c0;
+}
+
+footer {
+  margin-top: 20px;
+  font-size: 14px;
+  color: #757575;
+}
+
+
+
+so what i would like to do is add functionality to control my jetson nano rover with WASD keys on keyboard of client computer. change the flask server codes and frontend codes as necessary to make it happen.
+jetson nano should send uart commands with its uart pins to connected arduino. W when w key is pressed, A when a key is presses, S when s key is pressed, D when d key is pressed.
+
+
+here's the flask server code too:
+from flask import Flask, Response, jsonify
+from flask_cors import CORS
+import cv2
+from threading import Lock
+from ultralytics import YOLO
+
+app = Flask(__name__)
+CORS(app)
+
+# Load YOLOv8 classification model
+model = YOLO('YOLOv8_batch.pt')
+
+detected_objects = []
+lock = Lock()
+
+def generate_frames():
+    global detected_objects
+    cap = cv2.VideoCapture(0)
+
+    if not cap.isOpened():
+        print("Error: Camera could not be opened.")
+        return
+
+    while True:
+        success, frame = cap.read()
+        if not success:
+            print("Error: Frame capture failed.")
+            break
+
+        try:
+            results = model(frame, verbose=False)
+        except Exception as e:
+            print(f"Error during model inference: {e}")
+            continue
+
+        temp_detected_objects = []
+
+        try:
+            for result in results:
+                probs = result.probs
+                if probs is not None:
+                    cls_idx = probs.top1
+                    label = result.names[cls_idx]
+                    conf = probs.data[cls_idx].item()
+
+                    temp_detected_objects.append((label, conf))
+
+                    # Display the label and confidence on the frame
+                    cv2.putText(frame, f'{label} ({conf:.2f})', (10, 30),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        except Exception as e:
+            print(f"Error during classification processing: {e}")
+
+        with lock:
+            detected_objects = temp_detected_objects
+
+        try:
+            ret, buffer = cv2.imencode('.jpg', frame)
+            if not ret:
+                print("Error: Frame encoding failed.")
+                continue
+            frame = buffer.tobytes()
+        except Exception as e:
+            print(f"Error during frame encoding: {e}")
+            continue
+
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/detection_results')
+def detection_results():
+    global detected_objects
+    detection_summary = {}
+
+    with lock:
+        for label, conf in detected_objects:
+            if label in detection_summary:
+                detection_summary[label]['count'] += 1
+                detection_summary[label]['scores'].append(conf)
+            else:
+                detection_summary[label] = {'count': 1, 'scores': [conf]}
+
+    for label in detection_summary:
+        scores = detection_summary[label]['scores']
+        detection_summary[label]['average_score'] = sum(scores) / len(scores)
+
+    formatted_summary = {
+        f"{label} (avg score: {detection_summary[label]['average_score']:.2f})":
+        detection_summary[label]['count'] for label in detection_summary
+    }
+
+    return jsonify(formatted_summary)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5001)
