@@ -2,24 +2,25 @@
 #include <esp_now.h>
 
 // Replace with receiver MAC address
-uint8_t receiverMAC[] = {0x24, 0x6F, 0x28, 0x12, 0x34, 0x56};
+uint8_t receiverMAC[] = {0x38, 0x18, 0x2b, 0x8b, 0xab, 0x20};
 
-#define POT_X_PIN 34  // Left-Right
-#define POT_Y_PIN 35  // Forward-Backward
+#define POT_X_PIN 32  // Left-Right
+#define POT_Y_PIN 34  // Forward-Backward
+#define Z_PIN 14
 
 // ADC range is 0–4095 (12-bit)
 // Center is approx. 2048 for ideal centered joystick
 
 // === Calibration Values ===
-const int CENTER_X = 2048;
-const int CENTER_Y = 2048;
+const int CENTER_X = 1953;
+const int CENTER_Y = 1936;
 
 // Set custom thresholds for each direction (calibrated)
-const int FORWARD_THRESHOLD = 2250;   // above this = forward
+const int FORWARD_THRESHOLD = 2100;   // above this = forward
 const int BACKWARD_THRESHOLD = 1800;  // below this = backward
 
-const int RIGHT_THRESHOLD = 2350;     // above this = right
-const int LEFT_THRESHOLD = 1750;      // below this = left
+const int RIGHT_THRESHOLD = 3100;     // above this = right
+const int LEFT_THRESHOLD = 1100;      // below this = left
 
 typedef struct struct_message {
   bool forward;
@@ -27,6 +28,7 @@ typedef struct struct_message {
   bool left;
   bool right;
   bool stop;
+  bool spray;
 } struct_message;
 
 struct_message dataToSend;
@@ -56,9 +58,10 @@ void setup() {
 void loop() {
   int xVal = analogRead(POT_X_PIN); // Left-Right
   int yVal = analogRead(POT_Y_PIN); // Forward-Backward
+  int zVal = analogRead(Z_PIN); // sprayer
 
   // Default state
-  dataToSend = {false, false, false, false, true};
+  dataToSend = {false, false, false, false, true, false};
 
   // Calibrated direction checks
   if (yVal > FORWARD_THRESHOLD) {
@@ -77,7 +80,13 @@ void loop() {
     dataToSend.stop = false;
   }
 
+  if (zVal < 3000) {
+    dataToSend.spray = true;
+  } else if (zVal > 3000) {
+    dataToSend.spray = false;
+  }
+
   esp_now_send(receiverMAC, (uint8_t *)&dataToSend, sizeof(dataToSend));
 
-  delay(100); // adjust responsiveness
+  delay(50); // adjust responsiveness
 }
