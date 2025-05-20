@@ -6,21 +6,20 @@ uint8_t receiverMAC[] = {0x38, 0x18, 0x2b, 0x8b, 0xab, 0x20};
 
 #define POT_X_PIN 32  // Left-Right
 #define POT_Y_PIN 34  // Forward-Backward
-#define Z_PIN 14
-
-// ADC range is 0–4095 (12-bit)
-// Center is approx. 2048 for ideal centered joystick
+#define Z_PIN 14      // Sprayer potentiometer
 
 // === Calibration Values ===
 const int CENTER_X = 1953;
 const int CENTER_Y = 1936;
 
-// Set custom thresholds for each direction (calibrated)
-const int FORWARD_THRESHOLD = 2100;   // above this = forward
-const int BACKWARD_THRESHOLD = 1800;  // below this = backward
+// Direction thresholds (calibrated)
+const int FORWARD_THRESHOLD = 2100;
+const int BACKWARD_THRESHOLD = 1800;
+const int RIGHT_THRESHOLD = 3100;
+const int LEFT_THRESHOLD = 1100;
 
-const int RIGHT_THRESHOLD = 3100;     // above this = right
-const int LEFT_THRESHOLD = 1100;      // below this = left
+// Sprayer threshold
+const int SPRAY_ON_THRESHOLD = 2400;
 
 typedef struct struct_message {
   bool forward;
@@ -58,7 +57,7 @@ void setup() {
 void loop() {
   int xVal = analogRead(POT_X_PIN); // Left-Right
   int yVal = analogRead(POT_Y_PIN); // Forward-Backward
-  int zVal = analogRead(Z_PIN); // sprayer
+  int zVal = analogRead(Z_PIN);     // Sprayer
 
   // Default state
   dataToSend = {false, false, false, false, true, false};
@@ -80,13 +79,15 @@ void loop() {
     dataToSend.stop = false;
   }
 
-  if (zVal < 3000) {
-    dataToSend.spray = true;
-  } else if (zVal > 3000) {
-    dataToSend.spray = false;
-  }
+  // Sprayer control - fixed logic
+  dataToSend.spray = (zVal < SPRAY_ON_THRESHOLD); // Only activate when below threshold
+
+  // Debug output
+  Serial.print("Sprayer Value: ");
+  Serial.print(zVal);
+  Serial.print(" - Spray State: ");
+  Serial.println(dataToSend.spray ? "ON" : "OFF");
 
   esp_now_send(receiverMAC, (uint8_t *)&dataToSend, sizeof(dataToSend));
-
-  delay(50); // adjust responsiveness
+  delay(50); // Adjust responsiveness if needed
 }
