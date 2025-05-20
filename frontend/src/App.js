@@ -93,15 +93,15 @@ function LiveStream() {
   const getColorForDisease = (diseaseName) => {
     const colorMap = {
       'bacterial_leaf_blight': [255, 0, 0],
-      'brown_spot': [165, 42, 42],
+      'brown_spot': [255, 0, 0],
       'healthy': [0, 255, 0],
-      'leaf_blast': [128, 0, 128],
-      'leaf_scald': [255, 165, 0],
-      'narrow_brown_spot': [210, 105, 30],
-      'neck_blast': [0, 0, 255],
-      'rice_hispa': [255, 20, 147],
-      'sheath_blight': [139, 69, 19],
-      'tungro': [255, 255, 0]
+      'leaf_blast': [255, 0, 0],
+      'leaf_scald': [255, 0, 0],
+      'narrow_brown_spot': [255, 0, 0],
+      'neck_blast': [255, 0, 0],
+      'rice_hispa': [255, 0, 0],
+      'sheath_blight': [255, 0, 0],
+      'tungro': [255, 0, 0]
     };
     
     return colorMap[diseaseName.toLowerCase()] || [0, 128, 0]; // Default to green
